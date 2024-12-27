@@ -1,13 +1,6 @@
 import { LinearClient } from "@linear/sdk";
-import {
-  // subDays,
-  addDays,
-  startOfMonth,
-  // endOfMonth,
-  isAfter,
-  isBefore,
-  parseISO,
-} from "date-fns";
+import { addDays, startOfMonth, isAfter, isBefore, parseISO } from "date-fns";
+import type { Issue, IssueConnection, TeamConnection } from "@linear/sdk";
 
 // Map of workspace IDs to their API keys
 const WORKSPACE_API_KEYS: Record<string, string> = {
@@ -15,21 +8,40 @@ const WORKSPACE_API_KEYS: Record<string, string> = {
   coderabbit: process.env.NEXT_PUBLIC_LINEAR_CODERABBIT_API_KEY || "",
   jozu: process.env.NEXT_PUBLIC_LINEAR_JOZU_API_KEY || "",
   // flutterwave: process.env.NEXT_PUBLIC_LINEAR_FLUTTERWAVE_API_KEY || "",
-  // localazy: process.env.NEXT_PUBLIC_LINEAR_LOCALAZY_API_KEY || "",
-  // miaplatform: process.env.NEXT_PUBLIC_LINEAR_MIAPLATFORM_API_KEY || "",
-  // monogram: process.env.NEXT_PUBLIC_LINEAR_MONOGRAM_API_KEY || "",
-  // neon: process.env.NEXT_PUBLIC_LINEAR_NEON_API_KEY || "",
-  // novu: process.env.NEXT_PUBLIC_LINEAR_NOVU_API_KEY || "",
-  // nuvo: process.env.NEXT_PUBLIC_LINEAR_NUVO_API_KEY || "",
-  // roadmap: process.env.NEXT_PUBLIC_LINEAR_ROADMAP_API_KEY || "",
-  // simli: process.env.NEXT_PUBLIC_LINEAR_SIMLI_API_KEY || "",
-  // sourcegraph: process.env.NEXT_PUBLIC_SOURCEGRAPH_API_KEY || "",
-  // tns: process.env.NEXT_PUBLIC_LINEAR_TNS_API_KEY || "",
+  localazy: process.env.NEXT_PUBLIC_LINEAR_LOCALAZY_API_KEY || "",
+  miaplatform: process.env.NEXT_PUBLIC_LINEAR_MIAPLATFORM_API_KEY || "",
+  monogram: process.env.NEXT_PUBLIC_LINEAR_MONOGRAM_API_KEY || "",
+  neon: process.env.NEXT_PUBLIC_LINEAR_NEON_API_KEY || "",
+  novu: process.env.NEXT_PUBLIC_LINEAR_NOVU_API_KEY || "",
+  nuvo: process.env.NEXT_PUBLIC_LINEAR_NUVO_API_KEY || "",
+  roadmap: process.env.NEXT_PUBLIC_LINEAR_ROADMAP_API_KEY || "",
+  simli: process.env.NEXT_PUBLIC_LINEAR_SIMLI_API_KEY || "",
+  sourcegraph: process.env.NEXT_PUBLIC_SOURCEGRAPH_API_KEY || "",
+  tns: process.env.NEXT_PUBLIC_LINEAR_TNS_API_KEY || "",
   // Add more workspaces as needed
 };
 
+console.log(
+  "Available workspaces:",
+  Object.keys(WORKSPACE_API_KEYS).filter((key) => WORKSPACE_API_KEYS[key])
+);
+
 // Map to store workspace-specific Linear clients
 const clientsMap = new Map<string, LinearClient>();
+const teamCache = new Map<string, string>();
+
+// Add workflow states cache
+const workflowStatesCache = new Map<string, any[]>();
+
+async function getWorkflowStates(client: LinearClient, workspaceId: string) {
+  if (workflowStatesCache.has(workspaceId)) {
+    return workflowStatesCache.get(workspaceId)!;
+  }
+
+  const states = await client.workflowStates();
+  workflowStatesCache.set(workspaceId, states.nodes);
+  return states.nodes;
+}
 
 export function getLinearClient(workspaceId: string): LinearClient {
   if (!clientsMap.has(workspaceId)) {
@@ -42,52 +54,57 @@ export function getLinearClient(workspaceId: string): LinearClient {
   return clientsMap.get(workspaceId)!;
 }
 
-// List of available workspaces
 export const WORKSPACES = Object.keys(WORKSPACE_API_KEYS).map((id) => ({
   id,
-  name: `Workspace - ${id}`, // You can customize workspace names
+  name: `Workspace - ${id}`,
 }));
 
-export async function getWorkspaceIssues(workspaceId: string) {
-  try {
-    const client = getLinearClient(workspaceId);
-    const issues = await client.issues({
-      filter: {
-        team: { id: { eq: workspaceId } },
-      },
-      include: {
-        state: true,
-      },
-    });
-    return issues.nodes;
-  } catch (error) {
-    console.error("Error fetching workspace issues:", error);
-    throw error;
+async function getTeamId(workspaceId: string): Promise<string> {
+  if (teamCache.has(workspaceId)) {
+    return teamCache.get(workspaceId)!;
   }
+
+  const client = getLinearClient(workspaceId);
+  const teams = (await client.teams({
+    first: 1,
+  })) as TeamConnection;
+
+  if (teams.nodes.length === 0) {
+    throw new Error(`No teams found for workspace ${workspaceId}`);
+  }
+
+  const teamId = teams.nodes[0].id;
+  teamCache.set(workspaceId, teamId);
+  return teamId;
 }
 
-export type Author = {
+export interface Author {
   id: string;
   name: string;
   contentCount: number;
-};
+}
 
-export type ContentItem = {
+export interface ContentItem {
   id: string;
   title: string;
   status: string;
   dueDate: string | null;
   assignee: string | null;
   project: string | null;
-};
+}
 
-export type MonthlyContent = {
+export interface MonthlyContent {
   month: string;
   planned: number;
   completed: number;
-};
+}
 
-export type ContentMetrics = {
+export interface WorkflowStateCount {
+  name: string;
+  count: number;
+}
+
+export interface ContentMetrics {
   total: number;
   completed: number;
   inProgress: number;
@@ -98,79 +115,211 @@ export type ContentMetrics = {
   monthlyGrowth: MonthlyContent[];
   upcomingContent: ContentItem[];
   overdueContent: ContentItem[];
-};
+  workflowStates: WorkflowStateCount[];
+}
+
+interface LinearIssue {
+  id: string;
+  title: string;
+  state: {
+    id: string;
+    name: string;
+    type: string;
+  };
+  dueDate: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  canceledAt: Date | null;
+  assignee?: {
+    id: string;
+    displayName: string;
+  };
+  project?: {
+    id: string;
+    name: string;
+  };
+}
 
 export async function getContentMetrics(
   workspaceId: string
 ): Promise<ContentMetrics> {
   try {
     const client = getLinearClient(workspaceId);
+    const teamId = await getTeamId(workspaceId);
+
+    // Fetch states and issues in parallel
+    const [states, issuesResponse] = await Promise.all([
+      getWorkflowStates(client, workspaceId),
+      client.issues({
+        filter: {
+          team: { id: { eq: teamId } },
+        },
+        first: 100,
+        orderBy: "updatedAt",
+        include: {
+          assignee: true,
+          state: true,
+          project: true,
+        },
+      }) as Promise<IssueConnection>,
+    ]);
+
+    // Wait for all issue states and assignees to be resolved
+    const issues = await Promise.all(
+      issuesResponse.nodes.map(async (issue: any) => {
+        const [state, assignee] = await Promise.all([
+          issue.state,
+          issue.assignee,
+        ]);
+        return {
+          ...issue,
+          state: state,
+          assignee: assignee,
+        };
+      })
+    );
+
+    // Add debug logging
+    console.log(
+      "Resolved issues with states and assignees:",
+      issues.map((i) => ({
+        title: i.title,
+        state: i.state?.name,
+        assignee: i.assignee?.displayName,
+      }))
+    );
+
+    // Map state types to our categories using the fetched states
+    const getStateCategory = (state: any) => {
+      if (!state) return "backlog";
+      const name = state.name?.toLowerCase();
+
+      // Map based on your Linear workflow states
+      if (name === "published") {
+        return "completed";
+      }
+
+      // Review states
+      if (
+        name === "editor review" ||
+        name === "final review" ||
+        name === "seo review" ||
+        name === "grammar review" ||
+        name === "author/peer review"
+      ) {
+        return "inProgress";
+      }
+
+      // Active states
+      if (
+        name === "in progress" ||
+        name === "approved" ||
+        name === "approved for publishing"
+      ) {
+        return "inProgress";
+      }
+
+      // Terminal states
+      if (name === "duplicate" || name === "canceled") {
+        return "canceled";
+      }
+
+      // Default states
+      if (name === "backlog") {
+        return "backlog";
+      }
+
+      // Log any unhandled states
+      console.log("Unhandled state:", state.name);
+      return "backlog";
+    };
+
+    // Add today and nextWeek variables back
     const today = new Date();
     const nextWeek = addDays(today, 7);
+    const nextMonth = addDays(today, 30);
 
-    // Fetch all issues with necessary data
-    const issues = await client.issues({
-      filter: {
-        team: { id: { eq: workspaceId } },
-      },
-      include: {
-        state: true,
-        assignee: true,
-        project: true,
-      },
+    // Calculate metrics with resolved states
+    const totalIssues = issues.length;
+    const completedIssues = issues.filter(
+      (issue) => getStateCategory(issue.state) === "completed"
+    ).length;
+    const inProgressIssues = issues.filter(
+      (issue) => getStateCategory(issue.state) === "inProgress"
+    ).length;
+    const backlogIssues = issues.filter(
+      (issue) =>
+        getStateCategory(issue.state) === "backlog" ||
+        getStateCategory(issue.state) === "canceled"
+    ).length;
+
+    // Log state distribution for debugging
+    console.log("State distribution:", {
+      total: totalIssues,
+      completed: completedIssues,
+      inProgress: inProgressIssues,
+      backlog: backlogIssues,
+      stateCategories: issues.map((i) => ({
+        name: i.state?.name,
+        category: getStateCategory(i.state),
+      })),
     });
 
-    // Basic metrics
-    const totalIssues = issues.nodes.length;
-    const completedIssues = issues.nodes.filter(
-      (issue) => issue.state?.type?.toLowerCase() === "completed"
-    ).length;
-    const inProgressIssues = issues.nodes.filter(
-      (issue) => issue.state?.type?.toLowerCase() === "started"
-    ).length;
-    const backlogIssues = issues.nodes.filter(
-      (issue) => issue.state?.type?.toLowerCase() === "backlog"
-    ).length;
+    console.log(issues);
 
-    // Author metrics
-    const authorMap = new Map<string, number>();
-    issues.nodes.forEach((issue) => {
-      if (issue.assignee?.name) {
-        authorMap.set(
-          issue.assignee.name,
-          (authorMap.get(issue.assignee.name) || 0) + 1
-        );
+    // Map issues to content items - use resolved assignee
+    const mapToContentItem = (issue: Issue): ContentItem => ({
+      id: issue.id,
+      title: issue.title,
+      status: issue.state?.name || "Unknown",
+      dueDate: issue.dueDate,
+      assignee: issue.assignee?.displayName || null,
+      project: issue.project?.name || null,
+    });
+
+    // Calculate author metrics with resolved assignee data
+    const authorMap = new Map<string, { count: number; name: string }>();
+    issues.forEach((issue) => {
+      if (issue.assignee?.displayName) {
+        const name = issue.assignee.displayName;
+        const current = authorMap.get(name) || { count: 0, name };
+        current.count++;
+        authorMap.set(name, current);
       }
     });
-    const authors = Array.from(authorMap.entries())
-      .map(([name, count]) => ({ id: name, name, contentCount: count }))
+
+    const authors = Array.from(authorMap.values())
+      .map(({ name, count }) => ({
+        id: name,
+        name,
+        contentCount: count,
+      }))
       .sort((a, b) => b.contentCount - a.contentCount);
 
-    // Project list
+    // Get unique projects
     const projects = [
       ...new Set(
-        issues.nodes
-          .map((issue) => issue.project?.name)
-          .filter(Boolean) as string[]
+        issues.map((issue) => issue.project?.name).filter(Boolean) as string[]
       ),
     ];
 
-    // Monthly growth
+    // Calculate monthly growth
     const monthlyMap = new Map<
       string,
       { planned: number; completed: number }
     >();
-    issues.nodes.forEach((issue) => {
+    issues.forEach((issue) => {
       if (issue.dueDate) {
         const month = startOfMonth(parseISO(issue.dueDate)).toISOString();
         const current = monthlyMap.get(month) || { planned: 0, completed: 0 };
         current.planned++;
-        if (issue.state?.type?.toLowerCase() === "completed") {
+        if (issue.state?.name?.toLowerCase() === "completed") {
           current.completed++;
         }
         monthlyMap.set(month, current);
       }
     });
+
     const monthlyGrowth = Array.from(monthlyMap.entries())
       .map(([month, data]) => ({
         month,
@@ -178,39 +327,48 @@ export async function getContentMetrics(
       }))
       .sort((a, b) => a.month.localeCompare(b.month));
 
-    // Upcoming content (due within next week)
-    const upcomingContent = issues.nodes
+    // Filter upcoming and overdue content
+    const upcomingContent = issues
       .filter(
         (issue) =>
           issue.dueDate &&
           isAfter(parseISO(issue.dueDate), today) &&
-          isBefore(parseISO(issue.dueDate), nextWeek)
+          isBefore(parseISO(issue.dueDate), nextMonth) &&
+          getStateCategory(issue.state) !== "completed"
       )
-      .map((issue) => ({
-        id: issue.id,
-        title: issue.title,
-        status: issue.state?.name || "Unknown",
-        dueDate: issue.dueDate,
-        assignee: issue.assignee?.name || null,
-        project: issue.project?.name || null,
-      }));
+      .map(mapToContentItem)
+      .sort((a, b) =>
+        a.dueDate && b.dueDate
+          ? parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
+          : 0
+      );
 
-    // Overdue content
-    const overdueContent = issues.nodes
+    const overdueContent = issues
       .filter(
         (issue) =>
           issue.dueDate &&
           isBefore(parseISO(issue.dueDate), today) &&
-          issue.state?.type?.toLowerCase() !== "completed"
+          // Exclude Published and Final Review states
+          issue.state?.name !== "Published" &&
+          issue.state?.name !== "Final Review"
       )
-      .map((issue) => ({
-        id: issue.id,
-        title: issue.title,
-        status: issue.state?.name || "Unknown",
-        dueDate: issue.dueDate,
-        assignee: issue.assignee?.name || null,
-        project: issue.project?.name || null,
-      }));
+      .map(mapToContentItem)
+      .sort((a, b) =>
+        a.dueDate && b.dueDate
+          ? parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
+          : 0
+      ); // Sort by due date with oldest first
+
+    // Calculate workflow state counts
+    const stateCountMap = new Map<string, number>();
+    issues.forEach((issue) => {
+      const stateName = issue.state?.name || "Unknown";
+      stateCountMap.set(stateName, (stateCountMap.get(stateName) || 0) + 1);
+    });
+
+    const workflowStates = Array.from(stateCountMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
 
     return {
       total: totalIssues,
@@ -224,96 +382,18 @@ export async function getContentMetrics(
       monthlyGrowth,
       upcomingContent,
       overdueContent,
+      workflowStates,
     };
   } catch (error) {
-    console.error("Error fetching content metrics:", error);
-    throw error;
-  }
-}
-
-export async function getAggregateMetrics(): Promise<ContentMetrics> {
-  try {
-    // Get metrics from all workspaces in parallel
-    const allMetrics = await Promise.all(
-      WORKSPACES.map((workspace) => getContentMetrics(workspace.id))
-    );
-
-    // Combine metrics
-    const aggregateMetrics = allMetrics.reduce(
-      (acc, metrics) => {
-        // Basic metrics
-        acc.total += metrics.total;
-        acc.completed += metrics.completed;
-        acc.inProgress += metrics.inProgress;
-        acc.backlog += metrics.backlog;
-
-        // Combine authors
-        metrics.authors.forEach((author) => {
-          const existingAuthor = acc.authors.find((a) => a.id === author.id);
-          if (existingAuthor) {
-            existingAuthor.contentCount += author.contentCount;
-          } else {
-            acc.authors.push({ ...author });
-          }
-        });
-
-        // Combine projects
-        acc.projects = [...new Set([...acc.projects, ...metrics.projects])];
-
-        // Combine monthly growth
-        metrics.monthlyGrowth.forEach((monthly) => {
-          const existing = acc.monthlyGrowth.find(
-            (m) => m.month === monthly.month
-          );
-          if (existing) {
-            existing.planned += monthly.planned;
-            existing.completed += monthly.completed;
-          } else {
-            acc.monthlyGrowth.push({ ...monthly });
-          }
-        });
-
-        // Combine upcoming and overdue content
-        acc.upcomingContent.push(...metrics.upcomingContent);
-        acc.overdueContent.push(...metrics.overdueContent);
-
-        return acc;
-      },
-      {
-        total: 0,
-        completed: 0,
-        inProgress: 0,
-        backlog: 0,
-        completionRate: 0,
-        authors: [],
-        projects: [],
-        monthlyGrowth: [],
-        upcomingContent: [],
-        overdueContent: [],
-      }
-    );
-
-    // Calculate overall completion rate
-    aggregateMetrics.completionRate =
-      aggregateMetrics.total > 0
-        ? (aggregateMetrics.completed / aggregateMetrics.total) * 100
-        : 0;
-
-    // Sort combined data
-    aggregateMetrics.authors.sort((a, b) => b.contentCount - a.contentCount);
-    aggregateMetrics.monthlyGrowth.sort((a, b) =>
-      a.month.localeCompare(b.month)
-    );
-    aggregateMetrics.upcomingContent.sort((a, b) =>
-      a.dueDate && b.dueDate ? a.dueDate.localeCompare(b.dueDate) : 0
-    );
-    aggregateMetrics.overdueContent.sort((a, b) =>
-      a.dueDate && b.dueDate ? b.dueDate.localeCompare(a.dueDate) : 0
-    );
-
-    return aggregateMetrics;
-  } catch (error) {
-    console.error("Error fetching aggregate metrics:", error);
+    if (
+      error instanceof Error &&
+      error.message.includes("Rate limit exceeded")
+    ) {
+      console.error("Linear API rate limit reached. Please try again later.");
+      throw new Error(
+        "API rate limit reached. Please try again in a few minutes."
+      );
+    }
     throw error;
   }
 }
