@@ -19,11 +19,6 @@ const WORKSPACE_API_KEYS: Record<string, string> = {
   tns: process.env.NEXT_PUBLIC_LINEAR_TNS_API_KEY || "",
 };
 
-// console.log(
-//   "Available workspaces:",
-//   Object.keys(WORKSPACE_API_KEYS).filter((key) => WORKSPACE_API_KEYS[key])
-// );
-
 // Map to store workspace-specific Linear clients
 const clientsMap = new Map<string, LinearClient>();
 const teamCache = new Map<string, string>();
@@ -128,7 +123,7 @@ export async function getContentMetrics(
     const teamId = await getTeamId(workspaceId);
 
     // Fetch states and issues in parallel
-    const [states, issuesResponse] = await Promise.all([
+    const [, issuesResponse] = await Promise.all([
       getWorkflowStates(client, workspaceId),
       client.issues({
         filter: {
@@ -204,7 +199,7 @@ export async function getContentMetrics(
 
     // Add today and nextWeek variables back
     const today = new Date();
-    const nextWeek = addDays(today, 7);
+    // const nextWeek = addDays(today, 7);
     const nextMonth = addDays(today, 30);
 
     // Calculate metrics with resolved states

@@ -1,12 +1,28 @@
-import { useState } from "react"
-import { BarChart, Calendar, CheckCircle, Clock, FileText, Inbox, Users, XCircle } from 'lucide-react'
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { cn } from "@/lib/utils"
+import { useState } from "react";
+import {
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  Inbox,
+  XCircle,
+} from "lucide-react";
+import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { cn } from "@/lib/utils";
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import {
   Select,
   SelectContent,
@@ -15,7 +31,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -23,7 +39,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 
 // Sample data
 const contentGrowth = [
@@ -33,7 +49,7 @@ const contentGrowth = [
   { month: "Apr", planned: 40, completed: 35 },
   { month: "May", planned: 45, completed: 40 },
   { month: "Jun", planned: 50, completed: 48 },
-]
+];
 
 const authors = [
   { name: "Sarah Johnson", count: 45, completion: "98%" },
@@ -41,7 +57,7 @@ const authors = [
   { name: "Alex Kumar", count: 32, completion: "92%" },
   { name: "Lisa Patel", count: 28, completion: "94%" },
   { name: "Tom Wilson", count: 25, completion: "90%" },
-]
+];
 
 const upcomingContent = [
   {
@@ -62,7 +78,7 @@ const upcomingContent = [
     dueDate: "2024-01-27",
     status: "in-progress",
   },
-]
+];
 
 const overdueContent = [
   {
@@ -77,16 +93,18 @@ const overdueContent = [
     dueDate: "2024-01-18",
     status: "in-review",
   },
-]
+];
 
 export default function ContentDashboard() {
-  const [selectedProject, setSelectedProject] = useState("all")
+  const [selectedProject, setSelectedProject] = useState("all");
 
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Content Pipeline</h2>
+          <h2 className="text-3xl font-bold tracking-tight">
+            Content Pipeline
+          </h2>
           <div className="flex items-center space-x-2">
             <Select value={selectedProject} onValueChange={setSelectedProject}>
               <SelectTrigger className="w-[180px]">
@@ -107,7 +125,9 @@ export default function ContentDashboard() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Content</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Content
+              </CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -124,9 +144,7 @@ export default function ContentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">45</div>
-              <p className="text-xs text-muted-foreground">
-                23 due this week
-              </p>
+              <p className="text-xs text-muted-foreground">23 due this week</p>
             </CardContent>
           </Card>
           <Card>
@@ -177,7 +195,10 @@ export default function ContentDashboard() {
                 className="h-[300px] w-full [&_svg]:!w-full [&_svg]:!max-w-full"
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={contentGrowth} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <LineChart
+                    data={contentGrowth}
+                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  >
                     <XAxis dataKey="month" />
                     <YAxis />
                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -189,11 +210,7 @@ export default function ContentDashboard() {
                         r: 8,
                       }}
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="completed"
-                      strokeWidth={2}
-                    />
+                    <Line type="monotone" dataKey="completed" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartContainer>
@@ -202,9 +219,7 @@ export default function ContentDashboard() {
           <Card className="col-span-3">
             <CardHeader>
               <CardTitle>Top Authors</CardTitle>
-              <CardDescription>
-                Content creation leaderboard
-              </CardDescription>
+              <CardDescription>Content creation leaderboard</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -218,9 +233,15 @@ export default function ContentDashboard() {
                 <TableBody>
                   {authors.map((author) => (
                     <TableRow key={author.name}>
-                      <TableCell className="font-medium">{author.name}</TableCell>
-                      <TableCell className="text-right">{author.count}</TableCell>
-                      <TableCell className="text-right">{author.completion}</TableCell>
+                      <TableCell className="font-medium">
+                        {author.name}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {author.count}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {author.completion}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -250,7 +271,9 @@ export default function ContentDashboard() {
                 <TableBody>
                   {upcomingContent.map((content) => (
                     <TableRow key={content.title}>
-                      <TableCell className="font-medium">{content.title}</TableCell>
+                      <TableCell className="font-medium">
+                        {content.title}
+                      </TableCell>
                       <TableCell>{content.author}</TableCell>
                       <TableCell>{content.dueDate}</TableCell>
                       <TableCell>
@@ -258,10 +281,14 @@ export default function ContentDashboard() {
                           variant="outline"
                           className={cn(
                             "capitalize",
-                            content.status === "in-progress" && "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-                            content.status === "in-review" && "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-                            content.status === "completed" && "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-                            content.status === "backlog" && "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                            content.status === "in-progress" &&
+                              "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+                            content.status === "in-review" &&
+                              "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+                            content.status === "completed" &&
+                              "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+                            content.status === "backlog" &&
+                              "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
                           )}
                         >
                           {content.status}
@@ -294,18 +321,26 @@ export default function ContentDashboard() {
                 <TableBody>
                   {overdueContent.map((content) => (
                     <TableRow key={content.title}>
-                      <TableCell className="font-medium">{content.title}</TableCell>
+                      <TableCell className="font-medium">
+                        {content.title}
+                      </TableCell>
                       <TableCell>{content.author}</TableCell>
-                      <TableCell className="text-destructive">{content.dueDate}</TableCell>
+                      <TableCell className="text-destructive">
+                        {content.dueDate}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
                           className={cn(
                             "capitalize",
-                            content.status === "in-progress" && "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-                            content.status === "in-review" && "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-                            content.status === "completed" && "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-                            content.status === "backlog" && "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                            content.status === "in-progress" &&
+                              "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+                            content.status === "in-review" &&
+                              "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+                            content.status === "completed" &&
+                              "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+                            content.status === "backlog" &&
+                              "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
                           )}
                         >
                           {content.status}
@@ -320,6 +355,5 @@ export default function ContentDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }
-
