@@ -54,10 +54,13 @@ export function getLinearClient(workspaceId: string): LinearClient {
   return clientsMap.get(workspaceId)!;
 }
 
-export const WORKSPACES = Object.keys(WORKSPACE_API_KEYS).map((id) => ({
-  id,
-  name: `Workspace - ${id}`,
-}));
+export const WORKSPACES = [
+  { id: "all", name: "All Workspaces" },
+  ...Object.keys(WORKSPACE_API_KEYS).map((id) => ({
+    id,
+    name: `Workspace - ${id}`,
+  })),
+];
 
 async function getTeamId(workspaceId: string): Promise<string> {
   if (teamCache.has(workspaceId)) {
@@ -91,6 +94,7 @@ export interface ContentItem {
   dueDate: string | null;
   assignee: string | null;
   project: string | null;
+  workspace?: string;
 }
 
 export interface MonthlyContent {
@@ -127,6 +131,7 @@ interface LinearIssue {
     type: string;
   };
   dueDate: string | null;
+  createdAt: string;
   startedAt: Date | null;
   completedAt: Date | null;
   canceledAt: Date | null;
@@ -268,13 +273,17 @@ export async function getContentMetrics(
     console.log(issues);
 
     // Map issues to content items - use resolved assignee
-    const mapToContentItem = (issue: Issue): ContentItem => ({
+    const mapToContentItem = (
+      issue: Issue,
+      workspaceId: string
+    ): ContentItem => ({
       id: issue.id,
       title: issue.title,
       status: issue.state?.name || "Unknown",
       dueDate: issue.dueDate,
       assignee: issue.assignee?.displayName || null,
       project: issue.project?.name || null,
+      workspace: workspaceId,
     });
 
     // Calculate author metrics with resolved assignee data
@@ -303,21 +312,19 @@ export async function getContentMetrics(
       ),
     ];
 
-    // Calculate monthly growth
+    // Calculate monthly growth based on creation date instead of due date
     const monthlyMap = new Map<
       string,
       { planned: number; completed: number }
     >();
     issues.forEach((issue) => {
-      if (issue.dueDate) {
-        const month = startOfMonth(parseISO(issue.dueDate)).toISOString();
-        const current = monthlyMap.get(month) || { planned: 0, completed: 0 };
-        current.planned++;
-        if (issue.state?.name?.toLowerCase() === "completed") {
-          current.completed++;
-        }
-        monthlyMap.set(month, current);
+      const createdAt = startOfMonth(new Date(issue.createdAt)).toISOString();
+      const current = monthlyMap.get(createdAt) || { planned: 0, completed: 0 };
+      current.planned++;
+      if (issue.state?.name?.toLowerCase() === "published") {
+        current.completed++;
       }
+      monthlyMap.set(createdAt, current);
     });
 
     const monthlyGrowth = Array.from(monthlyMap.entries())
@@ -336,7 +343,7 @@ export async function getContentMetrics(
           isBefore(parseISO(issue.dueDate), nextMonth) &&
           getStateCategory(issue.state) !== "completed"
       )
-      .map(mapToContentItem)
+      .map((issue) => mapToContentItem(issue, workspaceId))
       .sort((a, b) =>
         a.dueDate && b.dueDate
           ? parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
@@ -348,16 +355,15 @@ export async function getContentMetrics(
         (issue) =>
           issue.dueDate &&
           isBefore(parseISO(issue.dueDate), today) &&
-          // Exclude Published and Final Review states
           issue.state?.name !== "Published" &&
           issue.state?.name !== "Final Review"
       )
-      .map(mapToContentItem)
+      .map((issue) => mapToContentItem(issue, workspaceId))
       .sort((a, b) =>
         a.dueDate && b.dueDate
           ? parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
           : 0
-      ); // Sort by due date with oldest first
+      );
 
     // Calculate workflow state counts
     const stateCountMap = new Map<string, number>();
@@ -396,4 +402,115 @@ export async function getContentMetrics(
     }
     throw error;
   }
+}
+
+export async function getAllWorkspacesMetrics(): Promise<ContentMetrics> {
+  // Get all active workspace IDs
+  const activeWorkspaces = Object.keys(WORKSPACE_API_KEYS).filter(
+    (key) => WORKSPACE_API_KEYS[key]
+  );
+
+  // Fetch metrics for all workspaces in parallel
+  const allMetrics = await Promise.all(
+    activeWorkspaces.map((id) => getContentMetrics(id))
+  );
+
+  // Combine metrics
+  return allMetrics.reduce(
+    (combined, current) => ({
+      total: combined.total + current.total,
+      completed: combined.completed + current.completed,
+      inProgress: combined.inProgress + current.inProgress,
+      backlog: combined.backlog + current.backlog,
+      completionRate:
+        ((combined.completed + current.completed) /
+          (combined.total + current.total)) *
+        100,
+      authors: mergeAuthors(combined.authors, current.authors),
+      projects: [...new Set([...combined.projects, ...current.projects])],
+      monthlyGrowth: mergeMontlyGrowth(
+        combined.monthlyGrowth,
+        current.monthlyGrowth
+      ),
+      upcomingContent: [
+        ...combined.upcomingContent,
+        ...current.upcomingContent,
+      ],
+      overdueContent: [...combined.overdueContent, ...current.overdueContent],
+      workflowStates: mergeWorkflowStates(
+        combined.workflowStates,
+        current.workflowStates
+      ),
+    }),
+    {
+      total: 0,
+      completed: 0,
+      inProgress: 0,
+      backlog: 0,
+      completionRate: 0,
+      authors: [],
+      projects: [],
+      monthlyGrowth: [],
+      upcomingContent: [],
+      overdueContent: [],
+      workflowStates: [],
+    } as ContentMetrics
+  );
+}
+
+// Helper functions for merging metrics
+function mergeAuthors(a1: Author[], a2: Author[]): Author[] {
+  const authorMap = new Map<string, number>();
+
+  [...a1, ...a2].forEach((author) => {
+    authorMap.set(
+      author.name,
+      (authorMap.get(author.name) || 0) + author.contentCount
+    );
+  });
+
+  return Array.from(authorMap.entries())
+    .map(([name, count]) => ({
+      id: name,
+      name,
+      contentCount: count,
+    }))
+    .sort((a, b) => b.contentCount - a.contentCount);
+}
+
+function mergeMontlyGrowth(
+  m1: MonthlyContent[],
+  m2: MonthlyContent[]
+): MonthlyContent[] {
+  const monthMap = new Map<string, { planned: number; completed: number }>();
+
+  [...m1, ...m2].forEach((item) => {
+    const current = monthMap.get(item.month) || { planned: 0, completed: 0 };
+    monthMap.set(item.month, {
+      planned: current.planned + item.planned,
+      completed: current.completed + item.completed,
+    });
+  });
+
+  return Array.from(monthMap.entries())
+    .map(([month, data]) => ({
+      month,
+      ...data,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function mergeWorkflowStates(
+  w1: WorkflowStateCount[],
+  w2: WorkflowStateCount[]
+): WorkflowStateCount[] {
+  const stateMap = new Map<string, number>();
+
+  [...w1, ...w2].forEach((state) => {
+    stateMap.set(state.name, (stateMap.get(state.name) || 0) + state.count);
+  });
+
+  return Array.from(stateMap.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 }

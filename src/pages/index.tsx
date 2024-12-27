@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useContent } from "@/context/ContentContext";
 import { WORKSPACES } from "@/lib/client";
 import {
@@ -11,6 +11,8 @@ import {
   Inbox,
   XCircle,
   RotateCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
@@ -51,6 +53,8 @@ import { Notification } from "@/components/ui/notification";
 export default function ContentDashboard() {
   const { state, dispatch, refreshMetrics } = useContent();
   const { selectedWorkspace, metrics, loading, error, lastUpdated } = state;
+
+  const [isAuthorsExpanded, setIsAuthorsExpanded] = useState(false);
 
   useEffect(() => {
     if (selectedWorkspace) {
@@ -105,6 +109,10 @@ export default function ContentDashboard() {
         100
       : 0;
 
+  const getDisplayedAuthors = (authors: Author[]) => {
+    return isAuthorsExpanded ? authors : authors.slice(0, 5);
+  };
+
   return (
     <>
       {error?.includes("rate limit") && (
@@ -117,7 +125,7 @@ export default function ContentDashboard() {
         <div className="flex-1 space-y-4 p-8 pt-6">
           <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">
-              Content Pipeline {loading && "(Refreshing...)"}
+              Hackmamba Content Pipeline {loading && "(Refreshing...)"}
             </h2>
             <div className="flex items-center space-x-4">
               <Select
@@ -157,7 +165,7 @@ export default function ContentDashboard() {
               </button>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -173,6 +181,22 @@ export default function ContentDashboard() {
                 </p>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Overdue Content
+                </CardTitle>
+                <XCircle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">
+                  {displayMetrics.overdueContent.length}
+                </div>
+                <p className="text-xs text-muted-foreground">Past due date</p>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -185,10 +209,11 @@ export default function ContentDashboard() {
                   {displayMetrics.inProgress}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {displayMetrics.upcomingContent.length} due this week
+                  {displayMetrics.upcomingContent.length} due this month
                 </p>
               </CardContent>
             </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Completed</CardTitle>
@@ -204,6 +229,7 @@ export default function ContentDashboard() {
                 </p>
               </CardContent>
             </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Backlog</CardTitle>
@@ -214,7 +240,7 @@ export default function ContentDashboard() {
                   {displayMetrics.backlog}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {displayMetrics.overdueContent.length} overdue
+                  Unassigned content
                 </p>
               </CardContent>
             </Card>
@@ -223,19 +249,17 @@ export default function ContentDashboard() {
             <Card className="col-span-4">
               <CardHeader>
                 <CardTitle>Content Growth</CardTitle>
-                <CardDescription>
-                  Planned vs completed content over time
-                </CardDescription>
+                <CardDescription>Content scheduled per month</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
                 <ChartContainer
                   config={{
                     planned: {
-                      label: "Planned Content",
+                      label: "Total Content",
                       color: "hsl(var(--chart-1))",
                     },
                     completed: {
-                      label: "Completed Content",
+                      label: "Published Content",
                       color: "hsl(var(--chart-2))",
                     },
                   }}
@@ -274,8 +298,32 @@ export default function ContentDashboard() {
             </Card>
             <Card className="col-span-3">
               <CardHeader>
-                <CardTitle>Top Authors</CardTitle>
-                <CardDescription>Content creation leaderboard</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Top Authors</CardTitle>
+                    <CardDescription>
+                      Content creation leaderboard
+                    </CardDescription>
+                  </div>
+                  {displayMetrics.authors.length > 5 && (
+                    <button
+                      onClick={() => setIsAuthorsExpanded(!isAuthorsExpanded)}
+                      className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      {isAuthorsExpanded ? (
+                        <>
+                          <span>Show Less</span>
+                          <ChevronUp className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          <span>Show All</span>
+                          <ChevronDown className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -289,25 +337,32 @@ export default function ContentDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayMetrics.authors.map((author) => (
-                      <TableRow key={author.id}>
-                        <TableCell className="font-medium">
-                          {author.name}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {author.contentCount}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {(
-                            (author.contentCount / displayMetrics.total) *
-                            100
-                          ).toFixed(1)}
-                          %
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {getDisplayedAuthors(displayMetrics.authors).map(
+                      (author) => (
+                        <TableRow key={author.id}>
+                          <TableCell className="font-medium">
+                            {author.name}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {author.contentCount}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {(
+                              (author.contentCount / displayMetrics.total) *
+                              100
+                            ).toFixed(1)}
+                            %
+                          </TableCell>
+                        </TableRow>
+                      )
+                    )}
                   </TableBody>
                 </Table>
+                {!isAuthorsExpanded && displayMetrics.authors.length > 5 && (
+                  <div className="mt-2 text-center text-sm text-muted-foreground">
+                    {displayMetrics.authors.length - 5} more authors
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -376,6 +431,9 @@ export default function ContentDashboard() {
                       <TableHead>Author</TableHead>
                       <TableHead>Due Date</TableHead>
                       <TableHead>Status</TableHead>
+                      {selectedWorkspace === "all" && (
+                        <TableHead>Workspace</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -414,6 +472,13 @@ export default function ContentDashboard() {
                             {content.status}
                           </Badge>
                         </TableCell>
+                        {selectedWorkspace === "all" && (
+                          <TableCell>
+                            <Badge variant="secondary" className="capitalize">
+                              {content.workspace}
+                            </Badge>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -436,6 +501,9 @@ export default function ContentDashboard() {
                       <TableHead>Author</TableHead>
                       <TableHead>Due Date</TableHead>
                       <TableHead>Status</TableHead>
+                      {selectedWorkspace === "all" && (
+                        <TableHead>Workspace</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -474,6 +542,13 @@ export default function ContentDashboard() {
                             {content.status}
                           </Badge>
                         </TableCell>
+                        {selectedWorkspace === "all" && (
+                          <TableCell>
+                            <Badge variant="secondary" className="capitalize">
+                              {content.workspace}
+                            </Badge>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

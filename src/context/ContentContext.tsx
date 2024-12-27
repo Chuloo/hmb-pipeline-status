@@ -5,7 +5,12 @@ import {
   ReactNode,
   useCallback,
 } from "react";
-import { ContentMetrics, WORKSPACES, getContentMetrics } from "@/lib/client";
+import {
+  ContentMetrics,
+  WORKSPACES,
+  getContentMetrics,
+  getAllWorkspacesMetrics,
+} from "@/lib/client";
 
 // Add refresh interval constant (1 hour in milliseconds)
 const REFRESH_INTERVAL = 60 * 60 * 1000;
@@ -16,6 +21,7 @@ interface ContentState {
   loading: boolean;
   error: string | null;
   lastUpdated: number | null;
+  cachedMetrics: Map<string, { data: ContentMetrics; timestamp: number }>;
 }
 
 type ContentAction =
@@ -24,6 +30,10 @@ type ContentAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "SET_LAST_UPDATED"; payload: number }
+  | {
+      type: "SET_CACHED_METRICS";
+      payload: { workspace: string; data: ContentMetrics };
+    }
   | { type: "CLEAR_CONTENT_DATA" };
 
 const initialState: ContentState = {
@@ -32,6 +42,7 @@ const initialState: ContentState = {
   loading: false,
   error: null,
   lastUpdated: null,
+  cachedMetrics: new Map(),
 };
 
 const contentReducer = (
@@ -69,6 +80,17 @@ const contentReducer = (
         ...state,
         lastUpdated: action.payload,
       };
+    case "SET_CACHED_METRICS":
+      return {
+        ...state,
+        cachedMetrics: new Map(state.cachedMetrics).set(
+          action.payload.workspace,
+          {
+            data: action.payload.data,
+            timestamp: Date.now(),
+          }
+        ),
+      };
     case "CLEAR_CONTENT_DATA":
       return {
         ...state,
@@ -93,25 +115,32 @@ export function ContentProvider({ children }: { children: ReactNode }) {
 
   const refreshMetrics = useCallback(
     async (force = false) => {
-      const { selectedWorkspace, lastUpdated } = state;
+      const { selectedWorkspace, lastUpdated, cachedMetrics } = state;
 
       if (!selectedWorkspace) return;
 
-      // Only check cache if we have metrics and not forcing refresh
       const now = Date.now();
-      if (
-        !force &&
-        lastUpdated &&
-        state.metrics &&
-        now - lastUpdated < REFRESH_INTERVAL
-      ) {
+      const cached = cachedMetrics.get(selectedWorkspace);
+
+      // Check cache unless forced refresh
+      if (!force && cached && now - cached.timestamp < REFRESH_INTERVAL) {
+        dispatch({ type: "SET_METRICS", payload: cached.data });
+        dispatch({ type: "SET_LAST_UPDATED", payload: cached.timestamp });
         return;
       }
 
       dispatch({ type: "SET_LOADING", payload: true });
       try {
-        const data = await getContentMetrics(selectedWorkspace);
+        const data =
+          selectedWorkspace === "all"
+            ? await getAllWorkspacesMetrics()
+            : await getContentMetrics(selectedWorkspace);
+
         dispatch({ type: "SET_METRICS", payload: data });
+        dispatch({
+          type: "SET_CACHED_METRICS",
+          payload: { workspace: selectedWorkspace, data },
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to fetch metrics";
@@ -132,7 +161,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.selectedWorkspace, state.lastUpdated, state.metrics]
+    [state.selectedWorkspace, state.cachedMetrics]
   );
 
   return (
