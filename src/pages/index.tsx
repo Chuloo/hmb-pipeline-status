@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useContent } from "@/context/ContentContext";
-import { WORKSPACES } from "@/lib/client";
+import {
+  WORKSPACES,
+  type ContentMetrics,
+  type Author,
+  type WorkflowStateCount,
+  type ContentItem,
+} from "@/lib/client";
+import { createClient } from "@/lib/supabase/component";
+import { useRouter } from "next/router";
 import {
   Calendar,
   CheckCircle,
@@ -49,10 +57,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Notification } from "@/components/ui/notification";
+import { Button } from "@/components/ui/button";
 
 export default function ContentDashboard() {
   const { state, dispatch, refreshMetrics } = useContent();
   const { selectedWorkspace, metrics, loading, error, lastUpdated } = state;
+  const router = useRouter();
+  const supabase = createClient();
 
   const [isAuthorsExpanded, setIsAuthorsExpanded] = useState(false);
 
@@ -73,6 +84,15 @@ export default function ContentDashboard() {
 
   const handleDismissError = () => {
     dispatch({ type: "SET_ERROR", payload: null });
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   // Default metrics when loading or no data
@@ -163,6 +183,13 @@ export default function ContentDashboard() {
                     : "Refresh"}
                 </span>
               </button>
+              <Button
+                variant="ghost"
+                onClick={handleSignOut}
+                className="text-sm text-muted-foreground"
+              >
+                Sign out
+              </Button>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -338,7 +365,7 @@ export default function ContentDashboard() {
                   </TableHeader>
                   <TableBody>
                     {getDisplayedAuthors(displayMetrics.authors).map(
-                      (author) => (
+                      (author: Author) => (
                         <TableRow key={author.id}>
                           <TableCell className="font-medium">
                             {author.name}
@@ -375,42 +402,47 @@ export default function ContentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
-                {displayMetrics.workflowStates.map((state) => (
-                  <div
-                    key={state.name}
-                    className="flex items-center justify-between space-x-2 rounded-lg border p-3"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{state.name}</p>
-                      <div className="flex items-center gap-2">
-                        <div className="text-2xl font-bold">{state.count}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {((state.count / displayMetrics.total) * 100).toFixed(
-                            1
-                          )}
-                          %
+                {displayMetrics.workflowStates.map(
+                  (state: WorkflowStateCount) => (
+                    <div
+                      key={state.name}
+                      className="flex items-center justify-between space-x-2 rounded-lg border p-3"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">{state.name}</p>
+                        <div className="flex items-center gap-2">
+                          <div className="text-2xl font-bold">
+                            {state.count}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {(
+                              (state.count / displayMetrics.total) *
+                              100
+                            ).toFixed(1)}
+                            %
+                          </div>
                         </div>
                       </div>
+                      <div
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          state.name.toLowerCase().includes("published") &&
+                            "bg-green-500",
+                          state.name.toLowerCase().includes("progress") &&
+                            "bg-blue-500",
+                          state.name.toLowerCase().includes("review") &&
+                            "bg-purple-500",
+                          state.name.toLowerCase().includes("backlog") &&
+                            "bg-gray-500",
+                          state.name.toLowerCase().includes("approved") &&
+                            "bg-yellow-500",
+                          state.name.toLowerCase().includes("canceled") &&
+                            "bg-red-500"
+                        )}
+                      />
                     </div>
-                    <div
-                      className={cn(
-                        "h-2 w-2 rounded-full",
-                        state.name.toLowerCase().includes("published") &&
-                          "bg-green-500",
-                        state.name.toLowerCase().includes("progress") &&
-                          "bg-blue-500",
-                        state.name.toLowerCase().includes("review") &&
-                          "bg-purple-500",
-                        state.name.toLowerCase().includes("backlog") &&
-                          "bg-gray-500",
-                        state.name.toLowerCase().includes("approved") &&
-                          "bg-yellow-500",
-                        state.name.toLowerCase().includes("canceled") &&
-                          "bg-red-500"
-                      )}
-                    />
-                  </div>
-                ))}
+                  )
+                )}
               </div>
             </CardContent>
           </Card>
@@ -437,50 +469,54 @@ export default function ContentDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayMetrics.upcomingContent.map((content) => (
-                      <TableRow key={content.id}>
-                        <TableCell className="font-medium">
-                          {content.title}
-                        </TableCell>
-                        <TableCell>
-                          {content.assignee || "Unassigned"}
-                        </TableCell>
-                        <TableCell>
-                          {format(parseISO(content.dueDate!), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "capitalize",
-                              content.status
-                                .toLowerCase()
-                                .includes("progress") &&
-                                "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-                              content.status.toLowerCase().includes("review") &&
-                                "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-                              content.status
-                                .toLowerCase()
-                                .includes("published") &&
-                                "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-                              content.status
-                                .toLowerCase()
-                                .includes("backlog") &&
-                                "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
-                            )}
-                          >
-                            {content.status}
-                          </Badge>
-                        </TableCell>
-                        {selectedWorkspace === "all" && (
+                    {displayMetrics.upcomingContent.map(
+                      (content: ContentItem) => (
+                        <TableRow key={content.id}>
+                          <TableCell className="font-medium">
+                            {content.title}
+                          </TableCell>
                           <TableCell>
-                            <Badge variant="secondary" className="capitalize">
-                              {content.workspace}
+                            {content.assignee || "Unassigned"}
+                          </TableCell>
+                          <TableCell>
+                            {format(parseISO(content.dueDate!), "MMM d, yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "capitalize",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("progress") &&
+                                  "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("review") &&
+                                  "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("published") &&
+                                  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("backlog") &&
+                                  "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                              )}
+                            >
+                              {content.status}
                             </Badge>
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          {selectedWorkspace === "all" && (
+                            <TableCell>
+                              <Badge variant="secondary" className="capitalize">
+                                {content.workspace}
+                              </Badge>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      )
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -507,50 +543,54 @@ export default function ContentDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayMetrics.overdueContent.map((content) => (
-                      <TableRow key={content.id}>
-                        <TableCell className="font-medium">
-                          {content.title}
-                        </TableCell>
-                        <TableCell>
-                          {content.assignee || "Unassigned"}
-                        </TableCell>
-                        <TableCell className="text-destructive">
-                          {format(parseISO(content.dueDate!), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "capitalize",
-                              content.status
-                                .toLowerCase()
-                                .includes("progress") &&
-                                "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-                              content.status.toLowerCase().includes("review") &&
-                                "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-                              content.status
-                                .toLowerCase()
-                                .includes("published") &&
-                                "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-                              content.status
-                                .toLowerCase()
-                                .includes("backlog") &&
-                                "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
-                            )}
-                          >
-                            {content.status}
-                          </Badge>
-                        </TableCell>
-                        {selectedWorkspace === "all" && (
+                    {displayMetrics.overdueContent.map(
+                      (content: ContentItem) => (
+                        <TableRow key={content.id}>
+                          <TableCell className="font-medium">
+                            {content.title}
+                          </TableCell>
                           <TableCell>
-                            <Badge variant="secondary" className="capitalize">
-                              {content.workspace}
+                            {content.assignee || "Unassigned"}
+                          </TableCell>
+                          <TableCell className="text-destructive">
+                            {format(parseISO(content.dueDate!), "MMM d, yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "capitalize",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("progress") &&
+                                  "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("review") &&
+                                  "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("published") &&
+                                  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+                                content.status
+                                  .toLowerCase()
+                                  .includes("backlog") &&
+                                  "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                              )}
+                            >
+                              {content.status}
                             </Badge>
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          {selectedWorkspace === "all" && (
+                            <TableCell>
+                              <Badge variant="secondary" className="capitalize">
+                                {content.workspace}
+                              </Badge>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      )
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>

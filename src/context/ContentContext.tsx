@@ -115,7 +115,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
 
   const refreshMetrics = useCallback(
     async (force = false) => {
-      const { selectedWorkspace, lastUpdated, cachedMetrics } = state;
+      const { selectedWorkspace, cachedMetrics } = state;
 
       if (!selectedWorkspace) return;
 

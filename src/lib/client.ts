@@ -7,7 +7,6 @@ const WORKSPACE_API_KEYS: Record<string, string> = {
   cloudinary: process.env.NEXT_PUBLIC_LINEAR_CLOUDINARY_API_KEY || "",
   coderabbit: process.env.NEXT_PUBLIC_LINEAR_CODERABBIT_API_KEY || "",
   jozu: process.env.NEXT_PUBLIC_LINEAR_JOZU_API_KEY || "",
-  // flutterwave: process.env.NEXT_PUBLIC_LINEAR_FLUTTERWAVE_API_KEY || "",
   localazy: process.env.NEXT_PUBLIC_LINEAR_LOCALAZY_API_KEY || "",
   miaplatform: process.env.NEXT_PUBLIC_LINEAR_MIAPLATFORM_API_KEY || "",
   monogram: process.env.NEXT_PUBLIC_LINEAR_MONOGRAM_API_KEY || "",
@@ -18,13 +17,12 @@ const WORKSPACE_API_KEYS: Record<string, string> = {
   simli: process.env.NEXT_PUBLIC_LINEAR_SIMLI_API_KEY || "",
   sourcegraph: process.env.NEXT_PUBLIC_SOURCEGRAPH_API_KEY || "",
   tns: process.env.NEXT_PUBLIC_LINEAR_TNS_API_KEY || "",
-  // Add more workspaces as needed
 };
 
-console.log(
-  "Available workspaces:",
-  Object.keys(WORKSPACE_API_KEYS).filter((key) => WORKSPACE_API_KEYS[key])
-);
+// console.log(
+//   "Available workspaces:",
+//   Object.keys(WORKSPACE_API_KEYS).filter((key) => WORKSPACE_API_KEYS[key])
+// );
 
 // Map to store workspace-specific Linear clients
 const clientsMap = new Map<string, LinearClient>();
@@ -122,29 +120,6 @@ export interface ContentMetrics {
   workflowStates: WorkflowStateCount[];
 }
 
-interface LinearIssue {
-  id: string;
-  title: string;
-  state: {
-    id: string;
-    name: string;
-    type: string;
-  };
-  dueDate: string | null;
-  createdAt: string;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  canceledAt: Date | null;
-  assignee?: {
-    id: string;
-    displayName: string;
-  };
-  project?: {
-    id: string;
-    name: string;
-  };
-}
-
 export async function getContentMetrics(
   workspaceId: string
 ): Promise<ContentMetrics> {
@@ -182,16 +157,6 @@ export async function getContentMetrics(
           assignee: assignee,
         };
       })
-    );
-
-    // Add debug logging
-    console.log(
-      "Resolved issues with states and assignees:",
-      issues.map((i) => ({
-        title: i.title,
-        state: i.state?.name,
-        assignee: i.assignee?.displayName,
-      }))
     );
 
     // Map state types to our categories using the fetched states
@@ -234,8 +199,6 @@ export async function getContentMetrics(
         return "backlog";
       }
 
-      // Log any unhandled states
-      console.log("Unhandled state:", state.name);
       return "backlog";
     };
 
@@ -257,20 +220,6 @@ export async function getContentMetrics(
         getStateCategory(issue.state) === "backlog" ||
         getStateCategory(issue.state) === "canceled"
     ).length;
-
-    // Log state distribution for debugging
-    console.log("State distribution:", {
-      total: totalIssues,
-      completed: completedIssues,
-      inProgress: inProgressIssues,
-      backlog: backlogIssues,
-      stateCategories: issues.map((i) => ({
-        name: i.state?.name,
-        category: getStateCategory(i.state),
-      })),
-    });
-
-    console.log(issues);
 
     // Map issues to content items - use resolved assignee
     const mapToContentItem = (
