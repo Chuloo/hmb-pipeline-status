@@ -130,6 +130,7 @@ export async function getContentMetrics(
           team: { id: { eq: teamId } },
         },
         first: 100,
+        // @ts-expect-error: Linear SDK type mismatch for orderBy parameter
         orderBy: "updatedAt",
         include: {
           assignee: true,
@@ -223,9 +224,12 @@ export async function getContentMetrics(
     ): ContentItem => ({
       id: issue.id,
       title: issue.title,
+      // @ts-expect-error: Linear SDK type mismatch for state properties
       status: issue.state?.name || "Unknown",
       dueDate: issue.dueDate,
+      // @ts-expect-error: Linear SDK type mismatch for assignee properties
       assignee: issue.assignee?.displayName || null,
+      // @ts-expect-error: Linear SDK type mismatch for project properties
       project: issue.project?.name || null,
       workspace: workspaceId,
     });
