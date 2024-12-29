@@ -304,7 +304,8 @@ export async function getContentMetrics(
           issue.dueDate &&
           isBefore(parseISO(issue.dueDate), today) &&
           issue.state?.name !== "Published" &&
-          issue.state?.name !== "Final Review"
+          issue.state?.name !== "Final Review" &&
+          issue.state?.name?.toLowerCase() !== "approved for publishing"
       )
       .map((issue) => mapToContentItem(issue, workspaceId))
       .sort((a, b) =>
