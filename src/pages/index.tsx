@@ -469,8 +469,14 @@ export default function ContentDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayMetrics.upcomingContent.map(
-                      (content: ContentItem) => (
+                    {displayMetrics.upcomingContent
+                      .sort((a, b) =>
+                        a.dueDate && b.dueDate
+                          ? parseISO(a.dueDate).getTime() -
+                            parseISO(b.dueDate).getTime()
+                          : 0
+                      )
+                      .map((content: ContentItem) => (
                         <TableRow key={content.id}>
                           <TableCell className="font-medium">
                             {content.title}
@@ -515,8 +521,7 @@ export default function ContentDashboard() {
                             </TableCell>
                           )}
                         </TableRow>
-                      )
-                    )}
+                      ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -543,8 +548,14 @@ export default function ContentDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayMetrics.overdueContent.map(
-                      (content: ContentItem) => (
+                    {displayMetrics.overdueContent
+                      .sort((a, b) =>
+                        a.dueDate && b.dueDate
+                          ? parseISO(a.dueDate).getTime() -
+                            parseISO(b.dueDate).getTime()
+                          : 0
+                      )
+                      .map((content: ContentItem) => (
                         <TableRow key={content.id}>
                           <TableCell className="font-medium">
                             {content.title}
@@ -589,8 +600,7 @@ export default function ContentDashboard() {
                             </TableCell>
                           )}
                         </TableRow>
-                      )
-                    )}
+                      ))}
                   </TableBody>
                 </Table>
               </CardContent>
